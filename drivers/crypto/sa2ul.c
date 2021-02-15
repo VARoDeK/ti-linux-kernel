@@ -2509,6 +2509,7 @@ static int sa_ul_remove(struct platform_device *pdev)
 static const struct of_device_id of_match[] = {
 	{.compatible = "ti,j721e-sa2ul",},
 	{.compatible = "ti,am654-sa2ul",},
+	{.compatible = "ti,am642-sa2ul",},
 	{},
 };
 MODULE_DEVICE_TABLE(of, of_match);
