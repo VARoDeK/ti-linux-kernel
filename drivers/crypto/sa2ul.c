@@ -988,11 +988,15 @@ static void sa_aes_dma_in_callback(void *data)
 	int i;
 	enum dma_data_direction dir_src;
 	bool diff_dst;
+	struct scatterlist *src, *dst;
+
+	src = rxd->src;
+	dst = rxd->dst;
 
 	req = container_of(rxd->req, struct skcipher_request, base);
-	sglen = sg_nents_for_len(req->src, req->cryptlen);
+	sglen = sg_nents_for_len(src, req->cryptlen);
 
-	diff_dst = (req->src != req->dst) ? true : false;
+	diff_dst = (src != dst) ? true : false;
 	dir_src = diff_dst ? DMA_TO_DEVICE : DMA_BIDIRECTIONAL;
 
 	if (req->iv) {
@@ -1004,14 +1008,13 @@ static void sa_aes_dma_in_callback(void *data)
 			result[i] = htonl(mdptr[i + rxd->iv_idx]);
 	}
 
-	dma_unmap_sg(rxd->ddev, req->src, sglen, dir_src);
+	dma_unmap_sg(rxd->ddev, src, sglen, dir_src);
 	kfree(rxd->split_src_sg);
 
 	if (diff_dst) {
-		sglen = sg_nents_for_len(req->dst, req->cryptlen);
+		sglen = sg_nents_for_len(dst, req->cryptlen);
 
-		dma_unmap_sg(rxd->ddev, req->dst, sglen,
-			     DMA_FROM_DEVICE);
+		dma_unmap_sg(rxd->ddev, dst, sglen, DMA_FROM_DEVICE);
 		kfree(rxd->split_dst_sg);
 	}
 
@@ -1180,7 +1183,7 @@ static int sa_run(struct sa_req *req)
 	rxd->iv_idx = req->ctx->iv_idx;
 	rxd->enc_iv_size = sa_ctx->cmdl_upd_info.enc_iv.size;
 	rxd->tx_in->callback = req->callback;
-	rxd->tx_in->callback_param = rxd;
+	rxd->tx_in->callback_param = (void *)rxd;
 
 	tx_out = dmaengine_prep_slave_sg(pdata->dma_tx, src,
 					 src_nents, DMA_MEM_TO_DEV,
@@ -1299,6 +1302,10 @@ static void sa_sha_dma_in_callback(void *data)
 	int i, sg_nents;
 	size_t ml, pl;
 	u32 *mdptr, *result;
+	struct scatterlist *src, *dst;
+
+	src = rxd->src;
+	dst = rxd->dst;
 
 	req = container_of(rxd->req, struct ahash_request, base);
 	tfm = crypto_ahash_reqtfm(req);
@@ -1312,8 +1319,8 @@ static void sa_sha_dma_in_callback(void *data)
 		for (i = 0; i < (authsize / 4); i++)
 			result[i] = htonl(mdptr[i + 4]);
 
-	sg_nents = sg_nents_for_len(req->src, req->nbytes);
-	dma_unmap_sg(rxd->ddev, req->src, sg_nents, DMA_FROM_DEVICE);
+	sg_nents = sg_nents_for_len(src, req->nbytes);
+	dma_unmap_sg(rxd->ddev, src, sg_nents, DMA_FROM_DEVICE);
 
 	kfree(rxd->split_src_sg);
 
@@ -1692,13 +1699,17 @@ static void sa_aead_dma_in_callback(void *data)
 	u32 *mdptr;
 	bool diff_dst;
 	enum dma_data_direction dir_src;
+	struct scatterlist *src, *dst;
+
+	src = rxd->src;
+	dst = rxd->dst;
 
 	req = container_of(rxd->req, struct aead_request, base);
 	tfm = crypto_aead_reqtfm(req);
 	start = req->assoclen + req->cryptlen;
 	authsize = crypto_aead_authsize(tfm);
 
-	diff_dst = (req->src != req->dst) ? true : false;
+	diff_dst = (src != dst) ? true : false;
 	dir_src = diff_dst ? DMA_TO_DEVICE : DMA_BIDIRECTIONAL;
 
 	mdptr = (u32 *)dmaengine_desc_get_metadata_ptr(rxd->tx_in, &pl, &ml);
@@ -1709,13 +1720,13 @@ static void sa_aead_dma_in_callback(void *data)
 	if (!rxd->enc)
 		auth_len -= authsize;
 
-	sglen =  sg_nents_for_len(rxd->src, auth_len);
-	dma_unmap_sg(rxd->ddev, rxd->src, sglen, dir_src);
+	sglen =  sg_nents_for_len(src, auth_len);
+	dma_unmap_sg(rxd->ddev, src, sglen, dir_src);
 	kfree(rxd->split_src_sg);
 
 	if (diff_dst) {
-		sglen = sg_nents_for_len(rxd->dst, auth_len);
-		dma_unmap_sg(rxd->ddev, rxd->dst, sglen, DMA_FROM_DEVICE);
+		sglen = sg_nents_for_len(dst, auth_len);
+		dma_unmap_sg(rxd->ddev, dst, sglen, DMA_FROM_DEVICE);
 		kfree(rxd->split_dst_sg);
 	}
 
